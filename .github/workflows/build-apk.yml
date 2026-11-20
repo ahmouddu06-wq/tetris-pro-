@@ -1,0 +1,53 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Installer les dépendances
+        run: npm install
+
+      - name: Créer le projet Android
+        run: |
+          npx cap add android
+          sed -i 's/<activity/<activity android:screenOrientation="portrait"/' android/app/src/main/AndroidManifest.xml
+          npx cap sync android
+
+      - name: Compiler l'APK
+        run: |
+          chmod +x android/gradlew
+          cd android && ./gradlew assembleDebug
+
+      - name: Garder l'APK (onglet Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tetris-pro-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publier l'APK dans les Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ github.run_number }}" \
+            android/app/build/outputs/apk/debug/app-debug.apk \
+            --title "Tetris Pro v${{ github.run_number }}" \
+            --notes "APK de test, à installer sur Android."
